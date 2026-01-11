@@ -1,0 +1,104 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: {{ .Values.pipeline.name }}
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "tekton-ci.labels" . | nindent 4 }}
+spec:
+  description: |
+    CI Pipeline for building Kotlin/Spring Boot applications with Gradle
+    and pushing Docker images to NCR (NHN Cloud Registry)
+
+  params:
+    - name: git-url
+      description: Git repository URL
+      type: string
+      default: {{ .Values.git.url | quote }}
+    - name: git-revision
+      description: Git revision to build (branch, tag, or commit SHA)
+      type: string
+      default: {{ .Values.git.revision | quote }}
+    - name: image-name
+      description: Image name (without registry and tag)
+      type: string
+      default: {{ .Values.docker.imageName | quote }}
+    - name: image-tag
+      description: Image tag
+      type: string
+      default: "latest"
+    - name: gradle-build-args
+      description: Gradle build arguments
+      type: string
+      default: {{ .Values.gradle.buildArgs | quote }}
+
+  workspaces:
+    - name: shared-workspace
+      description: Workspace shared between tasks (source code)
+    - name: gradle-cache
+      description: Gradle cache workspace for faster builds
+    - name: docker-credentials
+      description: Docker credentials for pushing to NCR
+
+  results:
+    - name: image-digest
+      description: Digest of the built image
+      value: $(tasks.docker-build-push.results.image-digest)
+    - name: image-url
+      description: URL of the built image
+      value: $(tasks.docker-build-push.results.image-url)
+    - name: git-commit
+      description: Git commit SHA that was built
+      value: $(tasks.git-clone.results.commit)
+
+  tasks:
+    # Task 1: Clone the Git repository
+    - name: git-clone
+      taskRef:
+        name: git-clone
+      params:
+        - name: url
+          value: $(params.git-url)
+        - name: revision
+          value: $(params.git-revision)
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+
+    # Task 2: Build with Gradle
+    - name: gradle-build
+      taskRef:
+        name: gradle-build
+      runAfter:
+        - git-clone
+      params:
+        - name: gradleVersion
+          value: {{ .Values.gradle.version | quote }}
+        - name: javaVersion
+          value: {{ .Values.gradle.javaVersion | quote }}
+        - name: buildArgs
+          value: $(params.gradle-build-args)
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+        - name: gradle-cache
+          workspace: gradle-cache
+
+    # Task 3: Build Docker image and push to NCR
+    - name: docker-build-push
+      taskRef:
+        name: docker-build-push
+      runAfter:
+        - gradle-build
+      params:
+        - name: image
+          value: "{{ .Values.docker.registry }}/$(params.image-name):$(params.image-tag)"
+        - name: dockerfile
+          value: {{ .Values.docker.dockerfilePath | quote }}
+        - name: context
+          value: {{ .Values.docker.contextPath | quote }}
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+        - name: dockerconfig
+          workspace: docker-credentials

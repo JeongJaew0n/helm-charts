@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "vanitas.fullname" . }}
+  labels:
+    {{- include "vanitas.labels" . | nindent 4 }}
+data:
+  SPRING_PROFILES_ACTIVE: {{ .Values.config.springProfiles | quote }}
+  JAVA_OPTS: {{ .Values.config.javaOpts | quote }}
+  {{- range $key, $value := .Values.config.customConfig }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}

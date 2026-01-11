@@ -1,0 +1,130 @@
+# Default values for tekton-ci
+
+# Namespace configuration
+namespace:
+  # Use existing namespace (tekton-pipelines) or create new one
+  create: false
+  name: tekton-pipelines
+
+# ServiceAccount for pipeline execution
+serviceAccount:
+  name: tekton-ci-sa
+  create: true
+
+# Git repository configuration
+git:
+  # Git repository URL (required)
+  url: "https://github.com/your-org/vanitas.git"
+  # Branch, tag, or commit to build
+  revision: "main"
+  # Optional: Git credentials for private repositories
+  credentials:
+    enabled: false
+    secretName: git-credentials
+    username: ""
+    # Use personal access token for password
+    password: ""
+
+# Gradle build configuration
+gradle:
+  # Gradle version
+  version: "8.5"
+  # Java version
+  javaVersion: "17"
+  # Gradle build arguments
+  buildArgs: "clean build -x test"
+  # Enable Gradle cache
+  cacheEnabled: true
+  cache:
+    # Storage class for PVC
+    storageClass: "standard"
+    # PVC size
+    size: "5Gi"
+
+# Docker/NCR configuration
+docker:
+  # NCR registry URL
+  registry: "kr-central-1.ncr.ntruss.com"
+  # Image name (without registry prefix)
+  # Example: "my-registry/vanitas"
+  imageName: "your-registry/vanitas"
+  # Dockerfile location relative to repo root
+  dockerfilePath: "./Dockerfile"
+  # Build context path
+  contextPath: "."
+
+# NCR (NHN Cloud Registry) credentials (required)
+ncr:
+  credentials:
+    secretName: ncr-credentials
+    # NCR Access Key ID
+    username: ""
+    # NCR Secret Key
+    password: ""
+    # Email for docker config
+    email: "noreply@example.com"
+
+# Pipeline configuration
+pipeline:
+  name: vanitas-ci-pipeline
+  # Resource limits for pipeline tasks
+  resources:
+    gitClone:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+    gradleBuild:
+      requests:
+        cpu: 1000m
+        memory: 2Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+    dockerBuild:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+
+# Tekton Triggers configuration
+triggers:
+  enabled: true
+  eventListener:
+    name: vanitas-listener
+    # Service type: LoadBalancer or ClusterIP (use with Ingress)
+    serviceType: LoadBalancer
+    servicePort: 8080
+  # Webhook secret for validation (optional but recommended)
+  webhook:
+    secretEnabled: false
+    secretName: webhook-secret
+    # Generate a random token: openssl rand -base64 32
+    secretToken: ""
+  # GitHub webhook configuration
+  github:
+    enabled: true
+    # Filter for specific event types
+    eventTypes:
+      - push
+    # Branch filter (only trigger for these branches)
+    branches:
+      - main
+
+# Manual PipelineRun trigger (optional)
+manualRun:
+  # Set to true to create a manual PipelineRun resource
+  enabled: false
+  name: vanitas-manual-run
+
+# Image tag strategy
+imageTag:
+  # Options: "git-sha" (commit SHA), "git-tag" (Git tag), "timestamp", "latest"
+  strategy: "git-sha"
+  # For timestamp strategy, format using Go time layout
+  # Example: "20060102-150405" for YYYYMMDD-HHMMSS
+  timestampFormat: "20060102-150405"

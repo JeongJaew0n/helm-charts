@@ -1,0 +1,26 @@
+{{- if .Values.serviceAccount.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Values.serviceAccount.name }}-role
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "tekton-ci.labels" . | nindent 4 }}
+rules:
+  # Permissions for managing pods (pipeline execution)
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  # Permissions for managing PVCs (workspace volumes)
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "create", "delete"]
+  # Permissions for reading secrets (registry credentials, git credentials)
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
+  # Permissions for reading configmaps
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
+{{- end }}

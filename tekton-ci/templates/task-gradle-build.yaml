@@ -1,0 +1,66 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: gradle-build
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "tekton-ci.labels" . | nindent 4 }}
+spec:
+  description: Build a Kotlin/Spring Boot project using Gradle
+  params:
+    - name: gradleVersion
+      description: Gradle version to use
+      type: string
+      default: {{ .Values.gradle.version | quote }}
+    - name: javaVersion
+      description: Java version to use
+      type: string
+      default: {{ .Values.gradle.javaVersion | quote }}
+    - name: buildArgs
+      description: Gradle build arguments
+      type: string
+      default: {{ .Values.gradle.buildArgs | quote }}
+    - name: projectPath
+      description: Path to the project in the workspace
+      type: string
+      default: "."
+  workspaces:
+    - name: source
+      description: Workspace containing the source code
+    - name: gradle-cache
+      description: Workspace for Gradle cache to speed up builds
+      optional: true
+  steps:
+    - name: build
+      image: gradle:$(params.gradleVersion)-jdk$(params.javaVersion)
+      workingDir: $(workspaces.source.path)/$(params.projectPath)
+      env:
+        - name: GRADLE_USER_HOME
+          value: $(workspaces.gradle-cache.path)/.gradle
+        - name: GRADLE_OPTS
+          value: "-Dorg.gradle.daemon=false -Dorg.gradle.caching=true"
+      script: |
+        #!/usr/bin/env bash
+        set -e
+
+        echo "Starting Gradle build..."
+        echo "Gradle version: $(params.gradleVersion)"
+        echo "Java version: $(params.javaVersion)"
+        echo "Build args: $(params.buildArgs)"
+        echo "Working directory: $(pwd)"
+
+        # Display Gradle and Java versions
+        gradle --version
+        java -version
+
+        # Run Gradle build
+        gradle $(params.buildArgs)
+
+        echo "Build completed successfully"
+      resources:
+        requests:
+          cpu: {{ .Values.pipeline.resources.gradleBuild.requests.cpu }}
+          memory: {{ .Values.pipeline.resources.gradleBuild.requests.memory }}
+        limits:
+          cpu: {{ .Values.pipeline.resources.gradleBuild.limits.cpu }}
+          memory: {{ .Values.pipeline.resources.gradleBuild.limits.memory }}

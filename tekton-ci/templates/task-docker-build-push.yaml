@@ -1,0 +1,72 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: docker-build-push
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "tekton-ci.labels" . | nindent 4 }}
+spec:
+  description: Build and push a Docker image using Kaniko
+  params:
+    - name: image
+      description: Reference of the image to build (with tag)
+      type: string
+    - name: dockerfile
+      description: Path to the Dockerfile to build
+      type: string
+      default: {{ .Values.docker.dockerfilePath | quote }}
+    - name: context
+      description: The build context used by Kaniko
+      type: string
+      default: {{ .Values.docker.contextPath | quote }}
+    - name: extraArgs
+      description: Extra arguments to pass to Kaniko
+      type: array
+      default: []
+  workspaces:
+    - name: source
+      description: Workspace containing the source code and Dockerfile
+    - name: dockerconfig
+      description: Docker config secret for registry authentication
+      mountPath: /kaniko/.docker
+  results:
+    - name: image-digest
+      description: Digest of the image just built
+    - name: image-url
+      description: URL of the image just built
+  steps:
+    - name: build-and-push
+      image: gcr.io/kaniko-project/executor:v1.19.0
+      workingDir: $(workspaces.source.path)
+      env:
+        - name: DOCKER_CONFIG
+          value: /kaniko/.docker
+      command:
+        - /kaniko/executor
+      args:
+        - --dockerfile=$(params.dockerfile)
+        - --context=$(workspaces.source.path)/$(params.context)
+        - --destination=$(params.image)
+        - --digest-file=$(results.image-digest.path)
+        - --cache=true
+        - --cache-ttl=24h
+        - --compressed-caching=false
+        - --snapshot-mode=redo
+        - --use-new-run
+        {{- range .Values.pipeline.resources.dockerBuild }}
+        - $(params.extraArgs[*])
+        {{- end }}
+      resources:
+        requests:
+          cpu: {{ .Values.pipeline.resources.dockerBuild.requests.cpu }}
+          memory: {{ .Values.pipeline.resources.dockerBuild.requests.memory }}
+        limits:
+          cpu: {{ .Values.pipeline.resources.dockerBuild.limits.cpu }}
+          memory: {{ .Values.pipeline.resources.dockerBuild.limits.memory }}
+
+    - name: write-url
+      image: bash:5.2
+      script: |
+        #!/usr/bin/env bash
+        set -e
+        echo -n "$(params.image)" > "$(results.image-url.path)"

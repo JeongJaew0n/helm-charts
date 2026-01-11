@@ -1,0 +1,82 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: git-clone
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "tekton-ci.labels" . | nindent 4 }}
+    app.kubernetes.io/version: "0.9"
+spec:
+  description: Clone a git repository
+  params:
+    - name: url
+      description: Git repository URL
+      type: string
+    - name: revision
+      description: Git revision to check out (branch, tag, sha, ref)
+      type: string
+      default: "main"
+    - name: subdirectory
+      description: Subdirectory inside the "output" workspace to clone the repo into
+      type: string
+      default: ""
+    - name: deleteExisting
+      description: Clean out the contents of the destination directory if it already exists
+      type: string
+      default: "true"
+  workspaces:
+    - name: output
+      description: The git repo will be cloned onto the volume backing this workspace
+  results:
+    - name: commit
+      description: The precise commit SHA that was fetched by this Task
+    - name: url
+      description: The precise URL that was fetched by this Task
+  steps:
+    - name: clone
+      image: gcr.io/tekton-releases/github.com/tektoncd/pipeline/cmd/git-init:v0.40.2
+      env:
+        - name: PARAM_URL
+          value: $(params.url)
+        - name: PARAM_REVISION
+          value: $(params.revision)
+        - name: PARAM_SUBDIRECTORY
+          value: $(params.subdirectory)
+        - name: PARAM_DELETE_EXISTING
+          value: $(params.deleteExisting)
+        - name: WORKSPACE_OUTPUT_PATH
+          value: $(workspaces.output.path)
+      script: |
+        #!/usr/bin/env sh
+        set -eu
+
+        CHECKOUT_DIR="${WORKSPACE_OUTPUT_PATH}/${PARAM_SUBDIRECTORY}"
+
+        if [ "${PARAM_DELETE_EXISTING}" = "true" ] && [ -d "${CHECKOUT_DIR}" ]; then
+          echo "Cleaning out the contents of ${CHECKOUT_DIR}"
+          rm -rf "${CHECKOUT_DIR:?}"/*
+          rm -rf "${CHECKOUT_DIR:?}"/.[!.]*
+          rm -rf "${CHECKOUT_DIR:?}"/..?*
+        fi
+
+        /ko-app/git-init \
+          -url="${PARAM_URL}" \
+          -revision="${PARAM_REVISION}" \
+          -path="${CHECKOUT_DIR}"
+
+        cd "${CHECKOUT_DIR}"
+        RESULT_SHA="$(git rev-parse HEAD)"
+        EXIT_CODE="$?"
+        if [ "${EXIT_CODE}" != 0 ] ; then
+          exit "${EXIT_CODE}"
+        fi
+
+        echo -n "${RESULT_SHA}" > "$(results.commit.path)"
+        echo -n "${PARAM_URL}" > "$(results.url.path)"
+      resources:
+        requests:
+          cpu: {{ .Values.pipeline.resources.gitClone.requests.cpu }}
+          memory: {{ .Values.pipeline.resources.gitClone.requests.memory }}
+        limits:
+          cpu: {{ .Values.pipeline.resources.gitClone.limits.cpu }}
+          memory: {{ .Values.pipeline.resources.gitClone.limits.memory }}

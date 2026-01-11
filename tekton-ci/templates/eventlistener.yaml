@@ -1,0 +1,75 @@
+{{- if .Values.triggers.enabled }}
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: {{ .Values.triggers.eventListener.name }}
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "tekton-ci.labels" . | nindent 4 }}
+spec:
+  serviceAccountName: {{ .Values.serviceAccount.name }}
+  triggers:
+    - name: github-push-trigger
+      interceptors:
+        {{- if .Values.triggers.github.enabled }}
+        # GitHub interceptor to validate webhook and filter events
+        - ref:
+            name: github
+          params:
+            - name: eventTypes
+              value:
+                {{- range .Values.triggers.github.eventTypes }}
+                - {{ . }}
+                {{- end }}
+            {{- if .Values.triggers.webhook.secretEnabled }}
+            - name: secretRef
+              value:
+                secretName: {{ .Values.triggers.webhook.secretName }}
+                secretKey: secretToken
+            {{- end }}
+        {{- end }}
+        # CEL interceptor to filter branches
+        - ref:
+            name: cel
+          params:
+            - name: filter
+              value: >
+                {{- $branches := .Values.triggers.github.branches }}
+                {{- if $branches }}
+                {{- range $index, $branch := $branches }}
+                {{- if $index }} || {{ end }}
+                body.ref == 'refs/heads/{{ $branch }}'
+                {{- end }}
+                {{- else }}
+                true
+                {{- end }}
+            - name: overlays
+              value:
+                # Extract short SHA (first 7 characters of commit)
+                - key: short_sha
+                  expression: "body.after.truncate(7)"
+      bindings:
+        - ref: {{ .Values.triggers.eventListener.name }}-binding
+      template:
+        ref: {{ .Values.triggers.eventListener.name }}-template
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.triggers.eventListener.name }}
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "tekton-ci.labels" . | nindent 4 }}
+    app.kubernetes.io/component: eventlistener
+spec:
+  type: {{ .Values.triggers.eventListener.serviceType }}
+  ports:
+    - name: http
+      port: {{ .Values.triggers.eventListener.servicePort }}
+      protocol: TCP
+      targetPort: 8080
+  selector:
+    app.kubernetes.io/managed-by: EventListener
+    app.kubernetes.io/part-of: Triggers
+    eventlistener: {{ .Values.triggers.eventListener.name }}
+{{- end }}

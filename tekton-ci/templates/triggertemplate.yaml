@@ -1,0 +1,70 @@
+{{- if .Values.triggers.enabled }}
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: {{ .Values.triggers.eventListener.name }}-template
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "tekton-ci.labels" . | nindent 4 }}
+spec:
+  params:
+    - name: git-url
+      description: Git repository URL
+    - name: git-revision
+      description: Git revision (refs/heads/branch-name)
+    - name: git-commit-sha
+      description: Git commit SHA
+    - name: git-short-sha
+      description: Short git commit SHA
+    - name: repo-name
+      description: Repository name
+
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1beta1
+      kind: PipelineRun
+      metadata:
+        generateName: {{ .Values.pipeline.name }}-run-
+        namespace: {{ .Values.namespace.name }}
+        labels:
+          {{- include "tekton-ci.labels" . | nindent 10 }}
+          tekton.dev/pipeline: {{ .Values.pipeline.name }}
+          triggers.tekton.dev/trigger: {{ .Values.triggers.eventListener.name }}
+      spec:
+        pipelineRef:
+          name: {{ .Values.pipeline.name }}
+        serviceAccountName: {{ .Values.serviceAccount.name }}
+        params:
+          - name: git-url
+            value: $(tt.params.git-url)
+          - name: git-revision
+            # Extract branch name from refs/heads/branch-name
+            value: $(tt.params.git-revision)
+          - name: image-name
+            value: {{ .Values.docker.imageName | quote }}
+          - name: image-tag
+            # Use short commit SHA as image tag
+            value: $(tt.params.git-short-sha)
+          - name: gradle-build-args
+            value: {{ .Values.gradle.buildArgs | quote }}
+        workspaces:
+          - name: shared-workspace
+            volumeClaimTemplate:
+              spec:
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: 1Gi
+          {{- if .Values.gradle.cacheEnabled }}
+          - name: gradle-cache
+            persistentVolumeClaim:
+              claimName: gradle-cache-pvc
+          {{- else }}
+          - name: gradle-cache
+            emptyDir: {}
+          {{- end }}
+          - name: docker-credentials
+            secret:
+              secretName: {{ .Values.ncr.credentials.secretName }}
+        timeout: 1h0m0s
+{{- end }}

@@ -1,0 +1,26 @@
+{{- if .Values.triggers.enabled }}
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: {{ .Values.triggers.eventListener.name }}-binding
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "tekton-ci.labels" . | nindent 4 }}
+spec:
+  params:
+    # Extract git repository URL from webhook payload
+    - name: git-url
+      value: $(body.repository.clone_url)
+    # Extract branch name from ref (refs/heads/main -> main)
+    - name: git-revision
+      value: $(body.ref)
+    # Extract commit SHA for image tagging
+    - name: git-commit-sha
+      value: $(body.after)
+    # Extract short commit SHA (first 7 characters)
+    - name: git-short-sha
+      value: $(body.after)
+    # Repository name
+    - name: repo-name
+      value: $(body.repository.name)
+{{- end }}

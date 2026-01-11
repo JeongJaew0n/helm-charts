@@ -1,0 +1,13 @@
+apiVersion: v2
+name: tekton-ci
+description: Reusable Tekton CI/CD pipeline for building Kotlin/Spring Boot applications and pushing to NCR
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+maintainers:
+  - name: HeLLo2
+    email: popt0@naver.com
+annotations:
+  # Tekton version compatibility
+  tekton.dev/pipelines-version: ">=0.50.0"
+  tekton.dev/triggers-version: ">=0.25.0"
