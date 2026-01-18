@@ -52,11 +52,10 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 Generate docker config json for NCR
 */}}
 {{- define "tekton-ci.dockerconfigjson" -}}
-{{- $registry := .Values.docker.registry }}
-{{- $username := .Values.ncr.credentials.username }}
-{{- $password := .Values.ncr.credentials.password }}
-{{- $email := .Values.ncr.credentials.email }}
+{{- $registry := .Values.ncr.url }}
+{{- $username := .Values.ncr.username }}
+{{- $password := .Values.ncr.password }}
 {{- $auth := printf "%s:%s" $username $password | b64enc }}
-{{- $config := dict "auths" (dict $registry (dict "username" $username "password" $password "email" $email "auth" $auth)) }}
+{{- $config := dict "auths" (dict $registry (dict "username" $username "password" $password "auth" $auth)) }}
 {{- $config | toJson | b64enc }}
 {{- end }}

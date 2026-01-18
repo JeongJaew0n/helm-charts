@@ -1,0 +1,22 @@
+Vanitas CI 파이프라인이 설치되었습니다.
+
+Pipeline: {{ .Values.pipeline.name }}
+Namespace: {{ .Values.namespace.name }}
+
+=== Webhook URL 확인 ===
+
+  kubectl get svc {{ .Values.triggers.eventListener.name }} -n {{ .Values.namespace.name }}
+
+GitHub Webhook 설정:
+- Payload URL: http://<EXTERNAL-IP>:{{ .Values.triggers.eventListener.servicePort }}
+- Content type: application/json
+- Events: Push events
+
+=== 파이프라인 모니터링 ===
+
+  kubectl get pipelinerun -n {{ .Values.namespace.name }} -w
+  tkn pipelinerun logs -f -n {{ .Values.namespace.name }}
+
+=== 이미지 위치 ===
+
+  {{ .Values.ncr.url }}/{{ .Values.docker.imageName }}:<commit-sha>

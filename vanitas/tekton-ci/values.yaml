@@ -1,0 +1,88 @@
+# Vanitas 전용 Tekton CI 설정
+
+# Namespace configuration
+namespace:
+  create: false
+  name: tekton-pipelines
+
+# ServiceAccount for pipeline execution
+serviceAccount:
+  name: vanitas-ci-sa
+  create: true
+
+# Vanitas Git repository
+git:
+  url: "https://github.com/JeongJaew0n/VANITAS.git"
+  revision: "main"
+
+# Gradle build configuration (Vanitas용)
+gradle:
+  version: "8.14.3"
+  javaVersion: "21"
+  buildArgs: "clean build -x test"
+  cacheEnabled: true
+  cache:
+    storageClass: "standard"
+    size: "5Gi"
+
+# Docker configuration
+docker:
+  imageName: "vanitas"
+  dockerfilePath: "./Dockerfile"
+  contextPath: "."
+
+# NCR docker login - values-secrets.yaml에서 설정
+ncr:
+  url: ""
+  username: ""
+  password: ""
+  secretName: ncr-credentials
+
+# Pipeline configuration
+pipeline:
+  name: vanitas-ci-pipeline
+  resources:
+    gitClone:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+    gradleBuild:
+      requests:
+        cpu: 1000m
+        memory: 2Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+    dockerBuild:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+
+# Tekton Triggers configuration
+triggers:
+  enabled: true
+  eventListener:
+    name: vanitas-listener
+    serviceType: LoadBalancer
+    servicePort: 8080
+  webhook:
+    secretEnabled: false
+    secretName: webhook-secret
+    secretToken: ""
+  github:
+    enabled: true
+    eventTypes:
+      - push
+    branches:
+      - main
+
+# Image tag strategy
+imageTag:
+  strategy: "git-sha"
+  timestampFormat: "20060102-150405"

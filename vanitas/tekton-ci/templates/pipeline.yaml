@@ -92,7 +92,7 @@ spec:
         - gradle-build
       params:
         - name: image
-          value: "{{ .Values.docker.registry }}/$(params.image-name):$(params.image-tag)"
+          value: "{{ .Values.ncr.url }}/$(params.image-name):$(params.image-tag)"
         - name: dockerfile
           value: {{ .Values.docker.dockerfilePath | quote }}
         - name: context

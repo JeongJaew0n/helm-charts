@@ -1,0 +1,5 @@
+# Secret values files
+values-secrets.yaml
+values-*.local.yaml
+**/values-secrets.yaml
+**/values-*.local.yaml

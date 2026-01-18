@@ -1,106 +1,290 @@
-# Default values for vanitas
+# =============================================================================
+# Vanitas Helm Chart - values.yaml
+# 이 파일은 Helm 차트의 기본값을 정의합니다.
+# helm install 시 --set 또는 -f 옵션으로 값을 오버라이드할 수 있습니다.
+# =============================================================================
 
+# -----------------------------------------------------------------------------
+# 복제본 설정
+# 사용: deployment.yaml
+# -----------------------------------------------------------------------------
+# Pod 복제본 수. autoscaling.enabled=true이면 이 값은 무시됩니다.
+# HPA가 minReplicas~maxReplicas 범위 내에서 자동 조절합니다.
 replicaCount: 2
 
+# -----------------------------------------------------------------------------
+# 컨테이너 이미지 설정
+# 사용: deployment.yaml
+# -----------------------------------------------------------------------------
 image:
-  repository: kr-central-1.ncr.ntruss.com/your-registry/vanitas
-  pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: ""
+  # 컨테이너 이미지 저장소 URL (NCR, Docker Hub, ECR 등)
+  # 예: docker.io/library/nginx, gcr.io/project/image
+  repository: b26fb16b-kr1-registry.container.nhncloud.com/jjw-registry/example-app
 
-imagePullSecrets: []
+  # 이미지 Pull 정책
+  # - Always: 항상 레지스트리에서 새로 받음 (개발용)
+  # - IfNotPresent: 로컬에 없을 때만 받음 (권장)
+  # - Never: 로컬 이미지만 사용
+  pullPolicy: Always
+
+  # 이미지 태그. 빈 값이면 Chart.yaml의 appVersion을 사용합니다.
+  # 프로덕션에서는 'latest' 대신 특정 버전(예: v1.2.3, abc1234)을 권장합니다.
+  tag: "test0"
+
+# -----------------------------------------------------------------------------
+# 이미지 Pull Secret
+# 사용: deployment.yaml
+# -----------------------------------------------------------------------------
+# Private 레지스트리 접근용 Secret 이름 목록
+# kubectl create secret docker-registry <name> --docker-server=... 로 생성
+# 예: imagePullSecrets: [{ name: "ncr-credentials" }]
+imagePullSecrets: [
+  {name: "ncr-credentials"}
+]
+
+# -----------------------------------------------------------------------------
+# 이름 오버라이드
+# 사용: _helpers.tpl → 모든 템플릿의 리소스 이름에 영향
+# -----------------------------------------------------------------------------
+# 리소스 이름 오버라이드 (보통 비워둠)
+# 기본값: Chart 이름 (vanitas)
 nameOverride: ""
+
+# 전체 리소스 이름 오버라이드 (보통 비워둠)
+# 기본값: <release-name>-<chart-name> (예: my-release-vanitas)
 fullnameOverride: ""
 
+# -----------------------------------------------------------------------------
+# ServiceAccount 설정
+# 사용: serviceaccount.yaml, deployment.yaml
+# -----------------------------------------------------------------------------
+# Pod가 사용할 Kubernetes ServiceAccount 설정
+# K8s API 호출이나 클라우드 IAM 연동이 필요할 때만 사용
 serviceAccount:
-  # Specifies whether a service account should be created
-  create: true
-  # Annotations to add to the service account
+  # true: 전용 ServiceAccount 생성 (serviceaccount.yaml)
+  # false: 네임스페이스의 default ServiceAccount 사용
+  create: false
+
+  # ServiceAccount에 추가할 annotations
+  # AWS IRSA 예: eks.amazonaws.com/role-arn: arn:aws:iam::123456:role/my-role
+  # GCP Workload Identity 예: iam.gke.io/gcp-service-account: sa@project.iam.gserviceaccount.com
   annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
+
+  # ServiceAccount 이름. 빈 값이면 fullname 템플릿으로 자동 생성
   name: ""
 
+# -----------------------------------------------------------------------------
+# Pod 메타데이터
+# 사용: deployment.yaml (spec.template.metadata.annotations)
+# -----------------------------------------------------------------------------
+# Pod에 추가할 annotations (모니터링, 로깅 등에 활용)
+# 예: prometheus.io/scrape: "true"
 podAnnotations: {}
 
+# -----------------------------------------------------------------------------
+# 보안 컨텍스트 (Security Context)
+# 사용: deployment.yaml
+# -----------------------------------------------------------------------------
+# Pod 레벨 보안 설정 (Pod 내 모든 컨테이너에 적용)
+# 사용: deployment.yaml (spec.template.spec.securityContext)
 podSecurityContext:
+  # root 사용자로 실행 금지 (보안 권장사항)
   runAsNonRoot: true
+  # 컨테이너 실행 사용자 UID (1000 = 일반 사용자)
   runAsUser: 1000
+  # 볼륨 마운트 시 파일 그룹 GID
   fsGroup: 1000
 
+# 컨테이너 레벨 보안 설정
+# 사용: deployment.yaml (spec.template.spec.containers[].securityContext)
 securityContext:
+  # 권한 상승(setuid 등) 금지
   allowPrivilegeEscalation: false
+  # Linux capabilities 설정
   capabilities:
+    # 모든 특수 권한 제거 (보안 강화)
     drop:
     - ALL
+  # 루트 파일시스템을 읽기 전용으로 설정
+  # true로 하면 /tmp 등에 쓰기 불가 → Spring Boot는 false 권장
   readOnlyRootFilesystem: false
 
+# -----------------------------------------------------------------------------
+# Service 설정
+# 사용: service.yaml, deployment.yaml, ingress.yaml
+# -----------------------------------------------------------------------------
+# Kubernetes Service 설정 (Pod들을 네트워크로 노출)
 service:
+  # Service 타입
+  # - ClusterIP: 클러스터 내부에서만 접근 (기본값, Ingress와 함께 사용)
+  # - NodePort: 노드의 특정 포트로 외부 노출 (30000-32767)
+  # - LoadBalancer: 클라우드 LB 생성 (AWS ALB/NLB, GCP LB 등)
+  # 사용: service.yaml (spec.type)
   type: ClusterIP
+
+  # Service가 노출하는 포트 (외부에서 접근하는 포트)
+  # 사용: service.yaml (spec.ports[].port), ingress.yaml (backend.service.port)
   port: 8080
+
+  # 트래픽을 전달할 컨테이너 포트 (Pod 내부 포트)
+  # 사용: deployment.yaml (spec.template.spec.containers[].ports[].containerPort)
   targetPort: 8080
 
+# -----------------------------------------------------------------------------
+# Ingress 설정
+# 사용: ingress.yaml (enabled=true일 때만 생성)
+# -----------------------------------------------------------------------------
+# Ingress: 외부 HTTP(S) 트래픽을 클러스터 내부 Service로 라우팅
 ingress:
+  # Ingress 리소스 생성 여부
   enabled: false
+
+  # Ingress Controller 클래스 (nginx, traefik, alb 등)
+  # 사용: ingress.yaml (spec.ingressClassName)
   className: "nginx"
+
+  # Ingress에 추가할 annotations
+  # 사용: ingress.yaml (metadata.annotations)
   annotations:
+    # cert-manager로 TLS 인증서 자동 발급 시:
     # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # nginx ingress 설정 예:
+    # nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+
+  # 호스트 및 경로 라우팅 규칙
+  # 사용: ingress.yaml (spec.rules)
   hosts:
-    - host: vanitas.example.com
+    - host: vanitas.example.com  # 도메인 이름
       paths:
-        - path: /
-          pathType: Prefix
+        - path: /                 # URL 경로
+          pathType: Prefix        # Prefix: /로 시작하는 모든 경로 매칭
+
+  # TLS(HTTPS) 설정
+  # 사용: ingress.yaml (spec.tls)
   tls: []
-  #  - secretName: vanitas-tls
+  # TLS 활성화 예시:
+  #  - secretName: vanitas-tls    # TLS 인증서가 저장된 Secret 이름
   #    hosts:
-  #      - vanitas.example.com
+  #      - vanitas.example.com    # HTTPS로 서비스할 도메인
 
+# -----------------------------------------------------------------------------
+# 리소스 제한 (Resources)
+# 사용: deployment.yaml (spec.template.spec.containers[].resources)
+# -----------------------------------------------------------------------------
+# 컨테이너의 CPU/메모리 리소스 설정
+# 설정하지 않으면 노드의 모든 리소스를 사용할 수 있음 (비권장)
 resources:
+  # 상한선: 이 값을 초과하면 CPU는 throttling, 메모리는 OOMKilled
   limits:
-    cpu: 1000m
-    memory: 1Gi
+    cpu: 1000m      # 1000m = 1 vCPU
+    memory: 1Gi     # 1Gi = 1024Mi
+  # 요청량: Pod 스케줄링 시 이만큼의 리소스가 보장되어야 함
+  # requests <= limits 이어야 함
   requests:
-    cpu: 500m
-    memory: 512Mi
+    cpu: 100m       # 500m = 0.5 vCPU
+    memory: 512Mi   # 512Mi = 0.5Gi
 
+# -----------------------------------------------------------------------------
+# 오토스케일링 (HPA - Horizontal Pod Autoscaler)
+# 사용: hpa.yaml (enabled=true일 때만 생성), deployment.yaml (replicas 필드 제외)
+# -----------------------------------------------------------------------------
+# CPU/메모리 사용량에 따라 Pod 수를 자동 조절
 autoscaling:
+  # HPA 활성화 여부. true면 replicaCount는 무시됨
   enabled: true
-  minReplicas: 2
+
+  # 최소 Pod 수 (트래픽이 적어도 이 수 이하로 줄지 않음)
+  # 사용: hpa.yaml (spec.minReplicas)
+  minReplicas: 1
+
+  # 최대 Pod 수 (트래픽이 많아도 이 수 이상 늘지 않음)
+  # 사용: hpa.yaml (spec.maxReplicas)
   maxReplicas: 10
+
+  # CPU 사용률 목표 (%)
+  # 평균 CPU가 이 값을 초과하면 스케일 아웃
+  # 사용: hpa.yaml (spec.metrics[].resource.target.averageUtilization)
   targetCPUUtilizationPercentage: 70
+
+  # 메모리 사용률 목표 (%)
+  # 평균 메모리가 이 값을 초과하면 스케일 아웃
+  # 사용: hpa.yaml (spec.metrics[].resource.target.averageUtilization)
   targetMemoryUtilizationPercentage: 80
 
+# -----------------------------------------------------------------------------
+# Health Check Probes
+# 사용: deployment.yaml (spec.template.spec.containers[].livenessProbe/readinessProbe)
+# -----------------------------------------------------------------------------
+# Liveness Probe: 컨테이너가 살아있는지 확인
+# 실패하면 kubelet이 컨테이너를 재시작함
 livenessProbe:
   httpGet:
-    path: /actuator/health/liveness
+    # 헬스체크 엔드포인트
+    path: /healthz
+    # Service에서 정의한 포트 이름 (http)
     port: http
+  # 컨테이너 시작 후 첫 체크까지 대기 시간 (JVM 워밍업 고려)
   initialDelaySeconds: 60
+  # 체크 주기 (초)
   periodSeconds: 10
+  # 응답 대기 시간 (초). 초과하면 실패로 간주
   timeoutSeconds: 5
+  # 연속 실패 횟수. 이 횟수만큼 실패하면 컨테이너 재시작
   failureThreshold: 3
 
+# Readiness Probe: 컨테이너가 트래픽을 받을 준비가 됐는지 확인
+# 실패하면 Service 엔드포인트에서 제외 (트래픽 안 받음)
 readinessProbe:
   httpGet:
-    path: /actuator/health/readiness
+    # 헬스체크 엔드포인트
+    path: /healthz
     port: http
+  # Liveness보다 짧게 설정 (더 빨리 트래픽 받기 시작)
   initialDelaySeconds: 30
+  # 더 자주 체크해서 빠르게 Service에 등록/제외
   periodSeconds: 5
   timeoutSeconds: 3
   failureThreshold: 3
 
-# Application configuration
+# -----------------------------------------------------------------------------
+# 애플리케이션 설정 (ConfigMap으로 주입)
+# 사용: configmap.yaml → deployment.yaml (envFrom으로 Pod에 환경변수 주입)
+# -----------------------------------------------------------------------------
 config:
-  # Spring Boot profiles
+  # Spring Boot 활성 프로파일
+  # 예: dev, staging, prod
+  # 사용: configmap.yaml (SPRING_PROFILES_ACTIVE)~
   springProfiles: "prod"
-  # JVM options
+
+  # JVM 옵션
+  # -Xmx: 최대 힙 메모리 (resources.limits.memory의 70~80% 권장)
+  # -Xms: 초기 힙 메모리
+  # -XX:+UseG1GC: G1 가비지 컬렉터 사용 (Java 9+ 기본)
+  # 사용: configmap.yaml (JAVA_OPTS)
   javaOpts: "-Xmx768m -Xms512m -XX:+UseG1GC"
-  # Custom application configuration (key-value pairs)
+
+  # 추가 환경 변수 (key-value 형태로 ConfigMap에 추가됨)
+  # 사용: configmap.yaml (range로 순회하여 추가)
   customConfig: {}
+    # 예시:
     # EXAMPLE_KEY: "example-value"
     # DATABASE_URL: "jdbc:postgresql://postgres:5432/vanitas"
+    # REDIS_HOST: "redis-master"
 
+# -----------------------------------------------------------------------------
+# Pod 스케줄링 설정
+# 사용: deployment.yaml (spec.template.spec.nodeSelector/tolerations/affinity)
+# -----------------------------------------------------------------------------
+# 특정 노드에만 Pod 배치 (노드의 label과 매칭)
+# 예: nodeSelector: { disktype: ssd }
 nodeSelector: {}
 
+# Taint가 있는 노드에도 Pod 배치 허용
+# 예: tolerations: [{ key: "dedicated", operator: "Equal", value: "app", effect: "NoSchedule" }]
 tolerations: []
 
+# Pod 배치 선호도/제약 설정
+# - nodeAffinity: 특정 노드 선호
+# - podAffinity: 특정 Pod와 같은 노드 선호
+# - podAntiAffinity: 특정 Pod와 다른 노드 선호 (HA 구성)
 affinity: {}
