@@ -53,9 +53,6 @@ spec:
         - --compressed-caching=false
         - --snapshot-mode=redo
         - --use-new-run
-        {{- range .Values.pipeline.resources.dockerBuild }}
-        - $(params.extraArgs[*])
-        {{- end }}
       resources:
         requests:
           cpu: {{ .Values.pipeline.resources.dockerBuild.requests.cpu }}

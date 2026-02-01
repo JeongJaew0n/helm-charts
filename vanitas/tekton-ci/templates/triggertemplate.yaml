@@ -64,5 +64,7 @@ spec:
             emptyDir: {}
           {{- end }}
           - name: docker-credentials
+            secret:
+              secretName: {{ .Values.ncr.secretName }}
         timeout: 1h0m0s
 {{- end }}

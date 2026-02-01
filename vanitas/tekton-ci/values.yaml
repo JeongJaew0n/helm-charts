@@ -27,9 +27,9 @@ gradle:
 
 # Docker configuration
 docker:
-  imageName: "vanitas"
-  dockerfilePath: "./Dockerfile"
-  contextPath: "."
+  imageName: "vanitas-example-app"
+  dockerfilePath: "./example/Dockerfile"
+  contextPath: "./example"
 
 # NCR docker login - values-secrets.yaml에서 설정
 ncr:
